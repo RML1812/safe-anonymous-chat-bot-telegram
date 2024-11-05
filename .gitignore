@@ -1,4 +1,4 @@
-# Custom ignore for specific for this project
+# Custom ignore specific for this project
 model-export/
 
 # Byte-compiled / optimized / DLL files
