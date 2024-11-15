@@ -1,6 +1,7 @@
 # Custom ignore specific for this project
 model-export/
 *.db
+config.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
