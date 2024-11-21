@@ -1,3 +1,5 @@
 python-telegram-bot
 captcha
 nsfw-detector
+pysastrawi
+emoji
