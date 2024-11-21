@@ -1,10 +1,12 @@
 import logging
 import db_connection
+import responses
 from telegram import Update, ChatMember
 from telegram.ext import (ContextTypes, ConversationHandler)
 from UserStatus import UserStatus
 from config import ADMIN_ID
-from text_responses import *
+from text_preprocess.text_preprocessing import preprocess_text
+from model_handler import predict_toxicity
 
 # Define status for the conversation handler
 USER_ACTION = 0
@@ -17,7 +19,7 @@ logging.basicConfig(
 """
 List of commands
 ---> start - 🤖 memulai bot
----> search - 💬 melakukan pencarian chat dengan orang lain
+---> chat - 💬 melakukan pencarian chat dengan orang lain
 ---> next - ⏭ melakukan skip terhadap chat yang berjalan dan mencari chat kembali dengan orang lain 
 ---> stop - 🔚 memberhentikan aktivitas /search ataupun chat yang sedang berjalan
 ---> credit - 🧪 melihat angka kesehatan perilaku pengguna berdasarkan hasil riwayat dari toxic detection
@@ -33,7 +35,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     :param context: context of the bot
     :return: status USER_ACTION
     """
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=start_rp)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=responses.start)
 
     # Insert the user into the database, if not already present (check is done in the function)
     user_id = update.effective_user.id
@@ -57,7 +59,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if other_user_id is None:
             return await handle_not_in_chat(update, context)
         else:
-            return await in_chat(update, other_user_id)
+            return await in_chat(update, context, other_user_id)
     else:
         return await handle_not_in_chat(update, context)
 
@@ -73,6 +75,11 @@ async def handle_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     current_user_id = update.effective_user.id
     current_user_status = db_connection.get_user_status(user_id=current_user_id)
 
+    # Check user eligibility
+    if not db_connection.is_eligible_to_chat(current_user_id):
+        await context.bot.send_message(chat_id=current_user_id, text="⚠️ Your credit has reached 0. You are no longer allowed to use the chat feature.")
+        return
+
     if current_user_status == UserStatus.PARTNER_LEFT:
         # First, check if the user has been left by his/her partner (he/she would have updated this user's status to
         # PARTNER_LEFT)
@@ -87,7 +94,7 @@ async def handle_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         other_user = db_connection.get_partner_id(current_user_id)
         if other_user is not None:
             # If the user has been paired, then he/she is already in a chat, so warn him/her
-            await context.bot.send_message(chat_id=current_user_id, text=handle_chat_paired)
+            await context.bot.send_message(chat_id=current_user_id, text=responses.in_chat)
             return None
         else:
             return await start_search(update, context)
@@ -107,10 +114,10 @@ async def handle_not_in_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
     current_user_status = db_connection.get_user_status(user_id=current_user_id)
 
     if current_user_status in [UserStatus.IDLE, UserStatus.PARTNER_LEFT]:
-        await context.bot.send_message(chat_id=current_user_id, text="🤖 You are not in a chat, type /chat to start searching for a partner.")
+        await context.bot.send_message(chat_id=current_user_id, text=responses.not_in_chat)
         return
     elif current_user_status == UserStatus.IN_SEARCH:
-        await context.bot.send_message(chat_id=current_user_id, text="🤖 Message not delivered, you are still in search!")
+        await context.bot.send_message(chat_id=current_user_id, text=responses.in_searching)
         return
 
 
@@ -121,7 +128,7 @@ async def handle_already_in_search(update: Update, context: ContextTypes.DEFAULT
     :param context: context of the bot
     :return: None
     """
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="🤖 You are already in search!")
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=responses.in_searching)
     return
 
 
@@ -136,14 +143,14 @@ async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     # Set the user status to in_search
     db_connection.set_user_status(user_id=current_user_id, new_status=UserStatus.IN_SEARCH)
-    await context.bot.send_message(chat_id=current_user_id, text="🤖 Searching for a partner...")
+    await context.bot.send_message(chat_id=current_user_id, text=responses.start_searching)
 
     # Search for a partner
     other_user_id = db_connection.couple(current_user_id=current_user_id)
     # If a partner is found, notify both the users
     if other_user_id is not None:
-        await context.bot.send_message(chat_id=current_user_id, text="🤖 You have been paired with an user")
-        await context.bot.send_message(chat_id=other_user_id, text="🤖 You have been paired with an user")
+        await context.bot.send_message(chat_id=current_user_id, text=responses.searching_found)
+        await context.bot.send_message(chat_id=other_user_id, text=responses.searching_found)
 
     return
 
@@ -187,7 +194,7 @@ async def exit_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     current_user = update.effective_user.id
     if db_connection.get_user_status(user_id=current_user) != UserStatus.COUPLED:
-        await context.bot.send_message(chat_id=current_user, text="🤖 You are not in a chat!")
+        await context.bot.send_message(chat_id=current_user, text=responses.not_in_chat)
         return
 
     other_user = db_connection.get_partner_id(current_user)
@@ -197,9 +204,11 @@ async def exit_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Perform the uncoupling
     db_connection.uncouple(user_id=current_user)
 
-    await context.bot.send_message(chat_id=current_user, text="🤖 Ending chat...")
-    await context.bot.send_message(chat_id=other_user, text="🤖 Your partner has left the chat, type /chat to start searching for a new partner.")
-    await update.message.reply_text("🤖 You have left the chat.")
+    await context.bot.send_message(chat_id=current_user, text=responses.ending_chat)
+    await context.bot.send_message(chat_id=other_user, text=responses.stopped_chat)
+    await context.bot.send_message(chat_id=other_user, text=f"{responses.credit_score}{db_connection.get_user_credit(other_user)}")
+    await update.message.reply_text(responses.stop_chat)
+    await context.bot.send_message(chat_id=current_user, text=f"{responses.credit_score}{db_connection.get_user_credit(current_user)}")
 
     return
 
@@ -220,13 +229,39 @@ async def exit_then_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     return await start_search(update, context)
 
 
-async def in_chat(update: Update, other_user_id) -> None:
+async def in_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, other_user_id) -> None:
     """
-    Handles the case when the user is in chat
+    Handles the case when the user is in chat, processes and checks for toxicity in the message.
+    If the message is toxic, the bot ends the chat for both users.
     :param update: update received from the user
     :param other_user_id: id of the other user in chat
     :return: None
     """
+    # Retrieve the message text
+    message_text = update.message.text
+
+    # Preprocess the message
+    processed_text = preprocess_text(message_text)
+
+    # Check for toxicity
+    if predict_toxicity(processed_text):
+        # Notify the sender about toxic content
+        await context.bot.send_message(chat_id=update.effective_user.id, text=responses.toxic_stop_chat)
+        
+        # Notify the other user that the chat has ended
+        await context.bot.send_message(chat_id=other_user_id, text=responses.toxic_stopped_chat)
+
+        # Decrease credit by 25 for the toxic user
+        db_connection.update_credit(update.effective_user.id, -25)
+        # Increase credit by 5 points for other user
+        db_connection.update_credit(other_user_id, 5)
+
+        # Exit chat
+        await exit_chat(update, context)
+
+        return
+
+    # If not toxic, proceed to handle replies or forward messages
     # Check if the message is a reply to another message
     if update.message.reply_to_message is not None:
         # If the message is a reply to another message, check if the message is a reply to a message sent by the user
@@ -270,7 +305,7 @@ async def blocked_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         if user_status == UserStatus.COUPLED:
             other_user = db_connection.get_partner_id(user_id)
             db_connection.uncouple(user_id=user_id)
-            await context.bot.send_message(chat_id=other_user, text="🤖 Your partner has left the chat, type /chat to start searching for a new partner.")
+            await context.bot.send_message(chat_id=other_user, text=responses.stopped_chat)
         db_connection.remove_user(user_id=user_id)
         return ConversationHandler.END
     else:

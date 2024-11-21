@@ -17,9 +17,9 @@ if __name__ == '__main__':
             USER_ACTION: [
                 ChatMemberHandler(blocked_bot_handler),
                 MessageHandler((filters.TEXT | filters.ATTACHMENT) & ~ filters.COMMAND & ~filters.Regex("exit") & ~filters.Regex("chat")& ~filters.Regex("newchat") & ~filters.Regex("stats"), handle_message),
-                CommandHandler("exit", handle_exit_chat),
+                CommandHandler("stop", handle_exit_chat),
                 CommandHandler("chat", handle_chat),
-                CommandHandler("newchat", exit_then_chat),
+                CommandHandler("next", exit_then_chat),
                 CommandHandler("stats", handle_stats)]
         },
         fallbacks=[MessageHandler(filters.TEXT, handle_not_in_chat)]
