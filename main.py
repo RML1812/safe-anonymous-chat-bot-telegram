@@ -20,7 +20,10 @@ if __name__ == '__main__':
                 CommandHandler("stop", handle_exit_chat),
                 CommandHandler("chat", handle_chat),
                 CommandHandler("next", exit_then_chat),
-                CommandHandler("stats", handle_stats)]
+                CommandHandler("stats", handle_stats),
+                CommandHandler("help", handle_help),
+                CommandHandler("rules", handle_rules),
+                CommandHandler("credit", handle_credit)]
         },
         fallbacks=[MessageHandler(filters.TEXT, handle_not_in_chat)]
     )

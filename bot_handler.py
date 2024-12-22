@@ -185,7 +185,47 @@ async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     return
 
 
-async def exit_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_credit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handles the /stats command, showing the bot statistics if the user is the admin
+    :param update: update received from the user
+    :param context: context of the bot
+    :return: None
+    """
+    user_id = update.effective_user.id
+    await context.bot.send_message(chat_id=user_id, text=f"{responses.credit_score}{db_connection.get_user_credit(user_id)}")
+
+    return
+
+
+async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handles the /stats command, showing the bot statistics if the user is the admin
+    :param update: update received from the user
+    :param context: context of the bot
+    :return: None
+    """
+    user_id = update.effective_user.id
+    await context.bot.send_message(chat_id=user_id, text=responses.help)
+    
+    return
+
+
+async def handle_rules(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handles the /stats command, showing the bot statistics if the user is the admin
+    :param update: update received from the user
+    :param context: context of the bot
+    :return: None
+    """
+    user_id = update.effective_user.id
+    await context.bot.send_message(chat_id=user_id, text=responses.rules)
+    
+    return
+
+
+
+async def exit_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, toxic=False) -> None:
     """
     Exits from the chat, sending a message to the other user and updating the status of both the users
     :param update: update received from the user
@@ -200,6 +240,10 @@ async def exit_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     other_user = db_connection.get_partner_id(current_user)
     if other_user is None:
         return
+    
+    if toxic is False:
+        db_connection.update_credit(other_user, 5)
+        db_connection.update_credit(current_user, 5)
 
     # Perform the uncoupling
     db_connection.uncouple(user_id=current_user)
@@ -257,7 +301,7 @@ async def in_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, other_user
         db_connection.update_credit(other_user_id, 5)
 
         # Exit chat
-        await exit_chat(update, context)
+        await exit_chat(update, context, True)
 
         return
 
@@ -306,7 +350,6 @@ async def blocked_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             other_user = db_connection.get_partner_id(user_id)
             db_connection.uncouple(user_id=user_id)
             await context.bot.send_message(chat_id=other_user, text=responses.stopped_chat)
-        db_connection.remove_user(user_id=user_id)
         return ConversationHandler.END
     else:
         # Telegram API does not provide a way to check if the bot was unblocked by the user

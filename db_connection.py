@@ -35,23 +35,6 @@ def insert_user(user_id):
     conn.close()
 
 
-def remove_user(user_id):
-    # If a user disconnects, remove him/her from the users table
-    conn, c = connect_to_db()
-    # Check if the user had a partner
-    partner_id = get_partner_id(user_id)
-    if partner_id:
-        # If the user had a partner, remove the user from the partner's row
-        c.execute("UPDATE users SET partner_id=NULL WHERE user_id=?", (partner_id,))
-        # Update the partner's status to UserStatus.PARTNER_LEFT
-        set_user_status(partner_id, UserStatus.PARTNER_LEFT)
-    else:
-        # Simply remove the user from the users table
-        c.execute("DELETE FROM users WHERE user_id=?", (user_id,))
-    conn.commit()
-    conn.close()
-
-
 def get_user_status(user_id):
     # Connect to the chatbot database
     conn, c = connect_to_db()

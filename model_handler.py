@@ -1,9 +1,9 @@
 import torch
-from transformers import BertTokenizer, BertForSequenceClassification
+from transformers import BertTokenizer
 
 # Load the model and tokenizer
 model_path = "model-creation/model-export"
-model = BertForSequenceClassification.from_pretrained(model_path)
+model = torch.load(f"{model_path}/model.pth")
 tokenizer = BertTokenizer.from_pretrained(model_path)
 model.eval()  # Set model to evaluation mode
 

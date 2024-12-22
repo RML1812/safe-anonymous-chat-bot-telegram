@@ -3,3 +3,5 @@ captcha
 nsfw-detector
 pysastrawi
 emoji
+sqlite3
+scikit-multilearn
