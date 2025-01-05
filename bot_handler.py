@@ -5,8 +5,7 @@ from telegram import Update, ChatMember
 from telegram.ext import (ContextTypes, ConversationHandler)
 from UserStatus import UserStatus
 from config import ADMIN_ID
-from text_preprocess.text_preprocessing import preprocess_text
-from model_handler import predict_toxicity
+from toxic_handler import predict_toxicity
 
 # Define status for the conversation handler
 USER_ACTION = 0
@@ -281,14 +280,11 @@ async def in_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, other_user
     :param other_user_id: id of the other user in chat
     :return: None
     """
-    # Retrieve the message text
-    message_text = update.message.text
-
-    # Preprocess the message
-    processed_text = preprocess_text(message_text)
+    # Retrieve the message
+    message = update.message
 
     # Check for toxicity
-    if predict_toxicity(processed_text):
+    if await predict_toxicity(context, message):
         # Notify the sender about toxic content
         await context.bot.send_message(chat_id=update.effective_user.id, text=responses.toxic_stop_chat)
         

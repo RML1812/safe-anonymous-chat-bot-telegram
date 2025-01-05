@@ -1,7 +1,8 @@
 python-telegram-bot
 captcha
-nsfw-detector
 pysastrawi
 emoji
 sqlite3
 scikit-multilearn
+transformers
+tf-keras

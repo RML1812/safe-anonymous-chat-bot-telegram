@@ -16,7 +16,8 @@ help = "🤖 Daftar Perintah\
         \n/next - ⏭ melakukan skip terhadap chat yang berjalan dan mencari chat kembali dengan orang lain\
         \n/stop - 🔚 memberhentikan aktivitas /search ataupun chat yang sedang berjalan\
         \n/credit - 🧪 melihat angka kesehatan perilaku pengguna berdasarkan hasil riwayat dari toxic detection\
-        \n/rules - 🚦 memperlihatkan peraturan yang ada saat menggunakan chat bot\n/help - 🔍 menjelaskan cara penggunaan chat bot"
+        \n/rules - 🚦 memperlihatkan peraturan yang ada saat menggunakan chat bot\
+        \n/help - 🔍 menjelaskan cara penggunaan chat bot"
 rules = "🤖 Peraturan Bot\
         \n1. Hormati sesama pengguna\
         \n2. Hindari konten toxic\
