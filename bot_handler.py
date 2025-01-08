@@ -1,14 +1,19 @@
 import logging
 import db_connection
 import responses
+import random
+import string
 from telegram import Update, ChatMember
 from telegram.ext import (ContextTypes, ConversationHandler)
 from UserStatus import UserStatus
 from config import ADMIN_ID
 from toxic_handler import predict_toxicity
+from io import BytesIO
+from captcha.image import ImageCaptcha
 
-# Define status for the conversation handler
-USER_ACTION = 0
+# Define status for states
+CAPTCHA = 0
+USER_ACTION = 1
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -29,18 +34,57 @@ List of commands
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
-    Welcomes the user and sets his/her status to idle if he/she is not already in the database
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: status USER_ACTION
+    Welcomes the user and sets their status to idle if not already in the database.
+    Prompts for captcha verification for new users.
     """
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=responses.start)
-
-    # Insert the user into the database, if not already present (check is done in the function)
     user_id = update.effective_user.id
-    db_connection.insert_user(user_id)
 
-    return USER_ACTION
+    # Check if the user exists in the database
+    if db_connection.check_user(user_id):
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=responses.start)
+        return USER_ACTION
+
+    # Generate and send the captcha for new users
+    captcha = ImageCaptcha()
+    random_string = ''.join(random.choices(string.ascii_letters.lower() + string.digits, k=5))
+    context.user_data['captcha'] = random_string  # Store the captcha in user data
+
+    data: BytesIO = captcha.generate(random_string)
+    await context.bot.send_photo(chat_id=update.effective_chat.id, photo=data, caption=responses.captcha_start)
+
+    # Move to CAPTCHA verification state
+    return CAPTCHA
+
+
+async def verify_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Verifies the user's input against the captcha.
+    """
+    user_input = update.message.text
+    correct_captcha = context.user_data.get('captcha')  # Retrieve stored captcha
+
+    if user_input == correct_captcha:
+        user_id = update.effective_user.id
+        db_connection.insert_user(user_id)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=responses.captcha_true)
+
+        # Proceed to the main functionality
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=responses.start)
+        return USER_ACTION
+    else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=responses.captcha_false)
+
+        # Generate and send a new captcha
+        captcha = ImageCaptcha()
+        random_string = ''.join(random.choices(string.ascii_letters.lower() + string.digits, k=5))
+        context.user_data['captcha'] = random_string
+
+        data: BytesIO = captcha.generate(random_string)
+        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=data, caption=responses.captcha_start)
+
+        # Stay in CAPTCHA state
+        return CAPTCHA
+
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -154,14 +198,14 @@ async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     return
 
 
-async def handle_exit_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handles the /exit command, exiting from the chat if the user is in chat
     :param update: update received from the user
     :param context: context of the bot
     :return: None
     """
-    await exit_chat(update, context)
+    await stop_chat(update, context)
     return
 
 
@@ -224,7 +268,7 @@ async def handle_rules(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 
-async def exit_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, toxic=False) -> None:
+async def stop_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, toxic=False) -> None:
     """
     Exits from the chat, sending a message to the other user and updating the status of both the users
     :param update: update received from the user
@@ -232,6 +276,12 @@ async def exit_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, toxic=Fa
     :return: a boolean value, True if the user was in chat (and so exited), False otherwise
     """
     current_user = update.effective_user.id
+
+    if db_connection.get_user_status(user_id=current_user) == UserStatus.IN_SEARCH:
+        db_connection.set_user_status(user_id=current_user, new_status=UserStatus.IDLE)
+        await context.bot.send_message(chat_id=current_user, text=responses.searching_stopped)
+        return
+    
     if db_connection.get_user_status(user_id=current_user) != UserStatus.COUPLED:
         await context.bot.send_message(chat_id=current_user, text=responses.not_in_chat)
         return
@@ -267,7 +317,7 @@ async def exit_then_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if db_connection.get_user_status(user_id=current_user) == UserStatus.IN_SEARCH:
         return await handle_already_in_search(update, context)
     # If exit_chat returns True, then the user was in chat and successfully exited
-    await exit_chat(update, context)
+    await stop_chat(update, context)
     # Either the user was in chat or not, start the search
     return await start_search(update, context)
 
@@ -297,7 +347,7 @@ async def in_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, other_user
         db_connection.update_credit(other_user_id, 5)
 
         # Exit chat
-        await exit_chat(update, context, True)
+        await stop_chat(update, context, True)
 
         return
 

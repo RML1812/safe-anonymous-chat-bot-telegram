@@ -1,4 +1,3 @@
-import os
 import io
 import torch
 from transformers import BertTokenizer, pipeline

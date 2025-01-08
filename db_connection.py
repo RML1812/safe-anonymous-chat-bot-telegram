@@ -17,19 +17,25 @@ def create_db():
     conn.commit()
     conn.close()
 
-
-def insert_user(user_id):
+def check_user(user_id):
     # Connect to the chatbot database
     conn, c = connect_to_db()
     # Check if the user is already in the users table
     c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
     if c.fetchone():
-        # If the user is already in the users table, do nothing
+        # If the user is already in the users table, returns True
         conn.close()
 
-        return
+        return True
+    
+    else:
+        return False
+    
+def insert_user(user_id):
+    # Connect to the chatbot database
+    conn, c = connect_to_db()
 
-    # Otherwise, insert the user into the users table
+    # Insert the user into the users table
     c.execute("INSERT INTO users VALUES (?, ?, ?, ?)", (user_id, 100, UserStatus.IDLE, None))  # No partner_id initially
     conn.commit()
     conn.close()
