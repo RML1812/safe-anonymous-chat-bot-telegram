@@ -1,3 +1,4 @@
+streamlit
 python-telegram-bot
 captcha
 pysastrawi

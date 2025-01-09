@@ -1,9 +1,11 @@
 import sqlite3
+
 from UserStatus import UserStatus
+
 
 def connect_to_db():
     # Connect to the chatbot database
-    conn = sqlite3.connect('users_database.db')
+    conn = sqlite3.connect("users_database.db")
     c = conn.cursor()
 
     return conn, c
@@ -13,9 +15,12 @@ def create_db():
     # Connect to the chatbot database
     conn, c = connect_to_db()
     # Create the users table if it does not exist (user_id, status, partner_id)
-    c.execute("CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, credit INT CHECK(credit >= 0 AND credit <= 100), status TEXT, partner_id TEXT)")
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, credit INT CHECK(credit >= 0 AND credit <= 100), status TEXT, partner_id TEXT)"
+    )
     conn.commit()
     conn.close()
+
 
 def check_user(user_id):
     # Connect to the chatbot database
@@ -25,20 +30,36 @@ def check_user(user_id):
     if c.fetchone():
         # If the user is already in the users table, returns True
         conn.close()
-
         return True
-    
     else:
         return False
-    
+
+
 def insert_user(user_id):
     # Connect to the chatbot database
     conn, c = connect_to_db()
 
     # Insert the user into the users table
-    c.execute("INSERT INTO users VALUES (?, ?, ?, ?)", (user_id, 100, UserStatus.IDLE, None))  # No partner_id initially
+    c.execute(
+        "INSERT INTO users VALUES (?, ?, ?, ?)", (user_id, 100, UserStatus.IDLE, None)
+    )  # No partner_id initially
     conn.commit()
     conn.close()
+
+
+def get_all_user_ids():
+    # Connect to the chatbot database
+    conn, c = connect_to_db()
+
+    # Execute the query to fetch all user_ids
+    c.execute("SELECT user_id FROM users")
+    user_ids = [row[0] for row in c.fetchall()]
+
+    # Close the connection
+    c.close()
+    conn.close()
+
+    return user_ids
 
 
 def get_user_status(user_id):
@@ -97,12 +118,12 @@ def get_user_credit(user_id):
     :return: The user's credit as an integer, or None if the user does not exist.
     """
     conn, c = connect_to_db()
-    
+
     # Fetch the user's credit
     c.execute("SELECT credit FROM users WHERE user_id=?", (user_id,))
     credit = c.fetchone()
     conn.close()
-    
+
     # Check if the user exists
     if credit is not None:
         return credit[0]  # Return the credit value
@@ -121,7 +142,7 @@ def is_eligible_to_chat(user_id):
 
     if credit and credit[0] > 0:
         return True
-    
+
     return False
 
 
@@ -135,7 +156,7 @@ def get_partner_id(user_id):
         # If no user is found, return None
         conn.close()
         return None
-    
+
     # otherwise, return the other user's id
     other_user_id = other_user_id[0]
     conn.close()
@@ -147,7 +168,13 @@ def couple(current_user_id):
     # Connect to the chatbot database
     conn, c = connect_to_db()
     # If the user is not the current one and is in search, then couple them
-    c.execute("SELECT user_id FROM users WHERE status=? AND user_id!=?", (UserStatus.IN_SEARCH, current_user_id,))
+    c.execute(
+        "SELECT user_id FROM users WHERE status=? AND user_id!=?",
+        (
+            UserStatus.IN_SEARCH,
+            current_user_id,
+        ),
+    )
     # Verify if another user in search is found
     other_user_id = c.fetchone()
     if not other_user_id:
@@ -156,12 +183,23 @@ def couple(current_user_id):
     # If another user in search is found, couple the users
     other_user_id = other_user_id[0]
     # Update both users' partner_id to reflect the coupling
-    c.execute("UPDATE users SET partner_id=? WHERE user_id=?", (other_user_id, current_user_id))
-    c.execute("UPDATE users SET partner_id=? WHERE user_id=?", (current_user_id, other_user_id))
+    c.execute(
+        "UPDATE users SET partner_id=? WHERE user_id=?",
+        (other_user_id, current_user_id),
+    )
+    c.execute(
+        "UPDATE users SET partner_id=? WHERE user_id=?",
+        (current_user_id, other_user_id),
+    )
 
     # Update both users status to UserStatus.COUPLED
-    c.execute("UPDATE users SET status=? WHERE user_id=?", (UserStatus.COUPLED, current_user_id))
-    c.execute("UPDATE users SET status=? WHERE user_id=?", (UserStatus.COUPLED, other_user_id))
+    c.execute(
+        "UPDATE users SET status=? WHERE user_id=?",
+        (UserStatus.COUPLED, current_user_id),
+    )
+    c.execute(
+        "UPDATE users SET status=? WHERE user_id=?", (UserStatus.COUPLED, other_user_id)
+    )
 
     conn.commit()
     conn.close()
@@ -183,7 +221,9 @@ def uncouple(user_id):
     c.execute("UPDATE users SET partner_id=NULL WHERE user_id=?", (partner_id,))
     # Update both users' status to UserStatus.IDLE
     c.execute("UPDATE users SET status=? WHERE user_id=?", (UserStatus.IDLE, user_id))
-    c.execute("UPDATE users SET status=? WHERE user_id=?", (UserStatus.IDLE, partner_id))
+    c.execute(
+        "UPDATE users SET status=? WHERE user_id=?", (UserStatus.IDLE, partner_id)
+    )
 
     conn.commit()
     conn.close()

@@ -1,9 +1,12 @@
+# Bot
 start = "🤖 Selamat datang :) \n\nBot ini menekankan keamanan dan kenyamanan kalian 🔒, 🔍 cari tau lebih lanjut dengan mengirimkan /help \n\nMulai pencarian chat dengan mengirimkan /chat"
-captcha_start = "🤖 Kamu adalah pengguna baru bot ini, masukkan captcha dengan benar untuk menggunakan bot ini"
+captcha_start = "🤖 Masukkan captcha dengan benar sebelum menggunakan bot ini"
 captcha_true = "🤖 Captcha benar!"
 captcha_false = "🤖 Captcha salah! Mencoba captcha kembali..."
 in_chat = "🤖 Kamu sudah di dalam chat"
-not_in_chat = "🤖 Kamu belum di dalam chat, Mulai pencarian chat dengan mengirimkan /chat"
+not_in_chat = (
+    "🤖 Kamu belum di dalam chat, Mulai pencarian chat dengan mengirimkan /chat"
+)
 start_searching = "🤖 Memulai pencarian chat..."
 in_searching = "🤖 Kamu masih dalam proses pencarian"
 searching_found = "🤖 Chat ditemukan, silahkan mulai obrolanmu!\nKirimkan /stop untuk keluar dari chat dan /next untuk skip chat"
@@ -29,3 +32,10 @@ rules = "🤖 Peraturan Bot\
         \n4. Dilarang spam atau iklan\
         \n5. Balas pesan dengan bijak\
         \n6. Hindari diskusi topik sensitif"
+
+
+# Admin
+turn_offline = "🪫 Bot sedang offline sehingga tidak dapat digunakan terlebih dahulu, maaf atas ketidaknyamannya"
+turn_online = (
+    "🔋 Bot sudah kembali online, kirimkan /start untuk kembali menggunakan bot"
+)
