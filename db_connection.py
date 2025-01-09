@@ -89,6 +89,7 @@ def update_credit(user_id, delta, conn=any, c=any):
     # Return the updated credit for logging or further use
     return new_credit
 
+
 def get_user_credit(user_id):
     """
     Retrieves the current credit value of a user by user_id.
@@ -158,7 +159,7 @@ def couple(current_user_id):
     c.execute("UPDATE users SET partner_id=? WHERE user_id=?", (other_user_id, current_user_id))
     c.execute("UPDATE users SET partner_id=? WHERE user_id=?", (current_user_id, other_user_id))
 
-    # Update both users' status to UserStatus.COUPLED
+    # Update both users status to UserStatus.COUPLED
     c.execute("UPDATE users SET status=? WHERE user_id=?", (UserStatus.COUPLED, current_user_id))
     c.execute("UPDATE users SET status=? WHERE user_id=?", (UserStatus.COUPLED, other_user_id))
 
