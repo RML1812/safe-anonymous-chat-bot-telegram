@@ -1,8 +1,22 @@
+import io
+
+import imageio.v3 as iio
+import lottie
+from PIL import Image
 from telegram import Message
 from telegram.ext import ContextTypes
 
-from model_handler import predict_toxic_photo, predict_toxic_text
+from model_handler import predict_toxic_image, predict_toxic_text
 from text_preprocess.text_preprocessing import preprocess_text
+
+
+async def get_to_memory(context: ContextTypes.DEFAULT_TYPE, data):
+    file = await context.bot.get_file(data)
+    out = io.BytesIO()
+    await file.download_to_memory(out)
+    out.seek(0)
+
+    return io.BytesIO(out.read())
 
 
 async def predict_toxicity(context: ContextTypes.DEFAULT_TYPE, message: Message):
@@ -16,4 +30,33 @@ async def predict_toxicity(context: ContextTypes.DEFAULT_TYPE, message: Message)
             if predict_toxic_text(text):
                 return True
 
-        return await predict_toxic_photo(context, message)
+        for i, photo in enumerate(message.photo):
+            if predict_toxic_image(await get_to_memory(context, photo)):
+                return True
+
+        return False
+
+    if message.sticker:
+        sticker = message.sticker
+
+        if message.sticker.is_animated:
+            file = await get_to_memory(context, sticker)
+            animation = lottie.parsers.tgs.parse_tgs(file)
+
+            image = io.BytesIO()
+            lottie.exporters.cairo.export_png(animation, image)
+
+            image.seek(0)
+            return predict_toxic_image(io.BytesIO(image.read()))
+
+        elif message.sticker.is_video:
+            file = await get_to_memory(context, sticker)
+            frame = iio.imread(file, extension=".webm", index=0)
+            image = Image.fromarray(frame)
+
+            return predict_toxic_image(image)
+
+        else:
+            image = await get_to_memory(context, sticker)
+
+            return predict_toxic_image(image)
