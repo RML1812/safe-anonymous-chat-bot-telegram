@@ -1,3 +1,4 @@
+import datetime
 import sqlite3
 
 from UserStatus import UserStatus
@@ -14,9 +15,19 @@ def connect_to_db():
 def create_db():
     # Connect to the chatbot database
     conn, c = connect_to_db()
-    # Create the users table if it does not exist (user_id, status, partner_id)
+    # Create the users table if it does not exist (user_id, start_bot_time, start_chat_time, credit, status, partner_id)
     c.execute(
-        "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, credit INT CHECK(credit >= 0 AND credit <= 100), status TEXT, partner_id TEXT)"
+        """
+        CREATE TABLE IF NOT EXISTS
+            users (
+                user_id TEXT PRIMARY KEY,
+                start_bot_time TIMESTAMP,
+                start_chat_time TIMESTAMP,
+                credit INT CHECK(credit >= 0 AND credit <= 100),
+                status TEXT,
+                partner_id TEXT
+            )
+        """
     )
     conn.commit()
     conn.close()
@@ -41,7 +52,15 @@ def insert_user(user_id):
 
     # Insert the user into the users table
     c.execute(
-        "INSERT INTO users VALUES (?, ?, ?, ?)", (user_id, 100, UserStatus.IDLE, None)
+        "INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            user_id,
+            None,
+            None,
+            100,
+            UserStatus.IDLE,
+            None,
+        ),
     )  # No partner_id initially
     conn.commit()
     conn.close()
@@ -77,7 +96,28 @@ def set_user_status(user_id, new_status):
     # Connect to the chatbot database
     conn, c = connect_to_db()
     # Set the status of the user
-    c.execute("UPDATE users SET status=? WHERE user_id=?", (new_status, user_id))
+    c.execute(
+        "UPDATE users SET status=? WHERE user_id=?",
+        (
+            new_status,
+            user_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def set_user_start_bot_time(user_id):
+    # Connect to the chatbot database
+    conn, c = connect_to_db()
+    # Set the status of the user
+    c.execute(
+        "UPDATE users SET start_bot_time=? WHERE user_id=?",
+        (
+            datetime.datetime.now(),
+            user_id,
+        ),
+    )
     conn.commit()
     conn.close()
 
@@ -102,7 +142,13 @@ def update_credit(user_id, delta, conn=any, c=any):
     new_credit = max(0, min(100, current_credit + delta))
 
     # Update the credit in the database
-    c.execute("UPDATE users SET credit=? WHERE user_id=?", (new_credit, user_id))
+    c.execute(
+        "UPDATE users SET credit=? WHERE user_id=?",
+        (
+            new_credit,
+            user_id,
+        ),
+    )
 
     conn.commit()
     conn.close()
@@ -183,28 +229,57 @@ def couple(current_user_id):
     # If another user in search is found, couple the users
     other_user_id = other_user_id[0]
     # Update both users' partner_id to reflect the coupling
+    start_chat_time = datetime.datetime.now()
     c.execute(
-        "UPDATE users SET partner_id=? WHERE user_id=?",
-        (other_user_id, current_user_id),
+        "UPDATE users SET partner_id=?, start_chat_time=?, status=? WHERE user_id=?",
+        (other_user_id, start_chat_time, UserStatus.COUPLED, current_user_id),
     )
     c.execute(
-        "UPDATE users SET partner_id=? WHERE user_id=?",
-        (current_user_id, other_user_id),
-    )
-
-    # Update both users status to UserStatus.COUPLED
-    c.execute(
-        "UPDATE users SET status=? WHERE user_id=?",
-        (UserStatus.COUPLED, current_user_id),
-    )
-    c.execute(
-        "UPDATE users SET status=? WHERE user_id=?", (UserStatus.COUPLED, other_user_id)
+        "UPDATE users SET partner_id=?, start_chat_time=?, status=? WHERE user_id=?",
+        (current_user_id, start_chat_time, UserStatus.COUPLED, other_user_id),
     )
 
     conn.commit()
     conn.close()
 
     return other_user_id
+
+
+def check_user_duration(user_id, min_duration=86400.0):
+    # Connect to the chatbot database
+    conn, c = connect_to_db()
+
+    c.execute("SELECT start_bot_time FROM users WHERE user_id=?", (user_id,))
+    start_bot_time = c.fetchone()
+    if not start_bot_time[0]:
+        conn.close()
+        return True
+
+    start_bot_time = datetime.datetime.fromisoformat(start_bot_time[0])
+    duration = datetime.datetime.now() - start_bot_time
+
+    return duration.total_seconds() >= min_duration
+
+
+def check_chat_duration(user_id, min_duration=300.0):
+    # Connect to the chatbot database
+    conn, c = connect_to_db()
+    # Retrieve the partner_id of the user
+    partner_id = get_partner_id(user_id)
+    if not partner_id:
+        # If the user is not coupled, return None
+        return False
+
+    c.execute("SELECT start_chat_time FROM users WHERE user_id=?", (user_id,))
+    start_chat_time = c.fetchone()
+    if not start_chat_time:
+        conn.close()
+        return False
+
+    start_chat_time = datetime.datetime.fromisoformat(start_chat_time[0])
+    duration = datetime.datetime.now() - start_chat_time
+
+    return duration.total_seconds() >= min_duration
 
 
 def uncouple(user_id):
@@ -216,13 +291,24 @@ def uncouple(user_id):
         # If the user is not coupled, return None
         return None
 
-    # Update both users' partner_id to reflect the uncoupling
-    c.execute("UPDATE users SET partner_id=NULL WHERE user_id=?", (user_id,))
-    c.execute("UPDATE users SET partner_id=NULL WHERE user_id=?", (partner_id,))
-    # Update both users' status to UserStatus.IDLE
-    c.execute("UPDATE users SET status=? WHERE user_id=?", (UserStatus.IDLE, user_id))
+    # Update both users to reflect the uncoupling
     c.execute(
-        "UPDATE users SET status=? WHERE user_id=?", (UserStatus.IDLE, partner_id)
+        "UPDATE users SET partner_id=?, start_chat_time=?, status=? WHERE user_id=?",
+        (
+            None,
+            None,
+            UserStatus.IDLE,
+            user_id,
+        ),
+    )
+    c.execute(
+        "UPDATE users SET partner_id=?, start_chat_time=?, status=? WHERE user_id=?",
+        (
+            None,
+            None,
+            UserStatus.IDLE,
+            partner_id,
+        ),
     )
 
     conn.commit()
@@ -249,6 +335,13 @@ def reset_users_status():
     # Connect to the chatbot database
     conn, c = connect_to_db()
     # Reset the status of all users to UserStatus.IDLE
-    c.execute("UPDATE users SET status=?", (UserStatus.IDLE,))
+    c.execute(
+        "UPDATE users SET start_bot_time=?, start_chat_time=?, status=?",
+        (
+            None,
+            None,
+            UserStatus.IDLE,
+        ),
+    )
     conn.commit()
     conn.close()

@@ -33,17 +33,17 @@ if __name__ == "__main__":
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            CAPTCHA: [MessageHandler(filters.TEXT & ~filters.COMMAND, verify_captcha)],
+            CAPTCHA: [
+                ChatMemberHandler(blocked_bot_handler),
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    verify_captcha,
+                ),
+            ],
             USER_ACTION: [
                 ChatMemberHandler(blocked_bot_handler),
                 MessageHandler(
-                    (filters.TEXT | filters.ATTACHMENT)
-                    & ~filters.COMMAND
-                    & ~filters.Regex("stop")
-                    & ~filters.Regex("chat")
-                    & ~filters.Regex("next")
-                    & ~filters.Regex("help")
-                    & ~filters.Regex("credit"),
+                    (filters.TEXT | filters.ATTACHMENT) & ~filters.COMMAND,
                     handle_message,
                 ),
                 CommandHandler("stop", handle_stop),

@@ -40,30 +40,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     # Check if the user exists in the database
     if db_connection.check_user(user_id):
-        await context.bot.send_message(
-            reply_markup=update_keyboard(user_id),
-            chat_id=update.effective_chat.id,
-            text=responses.start,
-        )
-        return USER_ACTION
+        if db_connection.check_user_duration(user_id):
+            await send_captcha(update, context)
+            return CAPTCHA
 
+        else:
+            return USER_ACTION
+
+    else:
+        await send_captcha(update, context)
+        return CAPTCHA
+
+
+async def send_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Generate and send the captcha for new users
     captcha = ImageCaptcha()
     random_string = "".join(
         random.choices(string.ascii_letters.lower() + string.digits, k=5)
     )
     context.user_data["captcha"] = random_string  # Store the captcha in user data
-
     data: BytesIO = captcha.generate(random_string)
+
     await context.bot.send_photo(
         reply_markup=ReplyKeyboardRemove(),
         chat_id=update.effective_chat.id,
         photo=data,
         caption=responses.captcha_start,
     )
-
-    # Move to CAPTCHA verification state
-    return CAPTCHA
 
 
 async def verify_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -75,37 +78,25 @@ async def verify_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if user_input == correct_captcha:
         user_id = update.effective_user.id
-        db_connection.insert_user(user_id)
+        if not db_connection.check_user(user_id):
+            db_connection.insert_user(user_id)
+
+        db_connection.set_user_start_bot_time(user_id)
+
         await context.bot.send_message(
             chat_id=update.effective_chat.id, text=responses.captcha_true
         )
 
-        # Proceed to the main functionality
         await context.bot.send_message(
             chat_id=update.effective_chat.id, text=responses.start
         )
-        return USER_ACTION
+
     else:
         await context.bot.send_message(
             chat_id=update.effective_chat.id, text=responses.captcha_false
         )
 
-        # Generate and send a new captcha
-        captcha = ImageCaptcha()
-        random_string = "".join(
-            random.choices(string.ascii_letters.lower() + string.digits, k=5)
-        )
-        context.user_data["captcha"] = random_string
-
-        data: BytesIO = captcha.generate(random_string)
-        await context.bot.send_photo(
-            chat_id=update.effective_chat.id,
-            photo=data,
-            caption=responses.captcha_start,
-        )
-
-        # Stay in CAPTCHA state
-        return CAPTCHA
+    return await start(update, context)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -145,7 +136,7 @@ async def handle_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await context.bot.send_message(
             reply_markup=update_keyboard(current_user_id),
             chat_id=current_user_id,
-            text="⚠️ Your credit has reached 0. You are no longer allowed to use the chat feature.",
+            text=responses.not_eligible,
         )
         return
 
@@ -230,6 +221,9 @@ async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     :param context: context of the bot
     :return: None
     """
+    if await start(update, context) is CAPTCHA:
+        return CAPTCHA
+
     current_user_id = update.effective_chat.id
 
     # Set the user status to in_search
@@ -350,9 +344,14 @@ async def stop_chat(
     if other_user is None:
         return
 
-    if toxic is False:
-        db_connection.update_credit(other_user, 5)
-        db_connection.update_credit(current_user, 5)
+    if toxic is True:
+        db_connection.update_credit(current_user, -25)
+        if db_connection.check_chat_duration(other_user):
+            db_connection.update_credit(other_user, 5)
+    else:
+        if db_connection.check_chat_duration(current_user):
+            db_connection.update_credit(current_user, 5)
+            db_connection.update_credit(other_user, 5)
 
     # Perform the uncoupling
     db_connection.uncouple(user_id=current_user)
@@ -426,11 +425,6 @@ async def in_chat(
             chat_id=other_user_id,
             text=responses.toxic_stopped_chat,
         )
-
-        # Decrease credit by 25 for the toxic user
-        db_connection.update_credit(update.effective_user.id, -25)
-        # Increase credit by 5 points for other user
-        db_connection.update_credit(other_user_id, 5)
 
         # Exit chat
         await stop_chat(update, context, True)

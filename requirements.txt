@@ -7,3 +7,5 @@ sqlite3
 scikit-multilearn
 transformers
 tf-keras
+lottie[all]
+imageio
