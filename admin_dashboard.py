@@ -8,11 +8,10 @@ from datetime import datetime
 
 import psutil
 import streamlit as st
-from telegram import Bot, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
 import db_connection
-import responses
-from config import ADMIN_NAME, ADMIN_PW, BOT_TOKEN
+from config import ADMIN_NAME, ADMIN_PW
+from LogHandler import LogHandler
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -23,43 +22,15 @@ if "pid" not in st.session_state:
 if "delay" not in st.session_state:
     st.session_state["delay"] = 3
 
-# Ensure the logs directory exists
-os.makedirs("logs", exist_ok=True)
-
-# Generate log file name with current date
-log_filename = datetime.now().strftime("logs/logs_%d-%m-%Y.txt")
-
-
-# Configure logging
-class ReverseLogHandler(logging.FileHandler):
-    def emit(self, record):
-        """Override emit to write newest logs at the top."""
-        try:
-            log_entry = self.format(record) + "\n"
-            if os.path.exists(self.baseFilename):
-                with open(self.baseFilename, "r+", encoding="utf-8") as file:
-                    content = file.read()
-                    file.seek(0, 0)
-                    file.write(log_entry.rstrip("\r\n") + "\n" + content)
-            else:
-                with open(self.baseFilename, "w", encoding="utf-8") as file:
-                    file.write(log_entry)
-        except Exception:
-            self.handleError(record)
-
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        ReverseLogHandler(log_filename),
-        logging.StreamHandler(),  # Optional: to also output logs to the console
+        LogHandler(),
+        logging.StreamHandler(),
     ],
 )
-
-
-def init_bot():
-    return Bot(token=BOT_TOKEN)
 
 
 def get_user_numbers():
@@ -80,21 +51,6 @@ async def set_online():
     with st.spinner("Setting bot online, please wait..."):
         process = subprocess.Popen([sys.executable, "main.py"])
         st.session_state["pid"] = process.pid
-
-        bot = init_bot()
-        user_ids = db_connection.get_all_user_ids()
-        for user_id in user_ids:
-            await bot.send_message(
-                reply_markup=ReplyKeyboardMarkup(
-                    [["/start"]],
-                    resize_keyboard=True,
-                    one_time_keyboard=True,
-                    is_persistent=True,
-                ),
-                chat_id=user_id,
-                text=responses.turn_online,
-            )
-
         logging.info("Bot turned online.")
         time.sleep(st.session_state["delay"])
         st.rerun()
@@ -104,18 +60,8 @@ async def set_offline():
     st.session_state["is_online"] = False
 
     with st.spinner("Setting bot offline, please wait..."):
-        bot = init_bot()
-        user_ids = db_connection.get_all_user_ids()
-
         if st.session_state["pid"] is not None:
             kills(st.session_state["pid"])
-            for user_id in user_ids:
-                await bot.send_message(
-                    reply_markup=ReplyKeyboardRemove(),
-                    chat_id=user_id,
-                    text=responses.turn_offline,
-                )
-
             logging.info("Bot turned offline.")
             time.sleep(st.session_state["delay"])
             st.rerun()

@@ -1,5 +1,5 @@
-import datetime
 import sqlite3
+from datetime import datetime
 
 from UserStatus import UserStatus
 
@@ -114,7 +114,7 @@ def set_user_start_bot_time(user_id):
     c.execute(
         "UPDATE users SET start_bot_time=? WHERE user_id=?",
         (
-            datetime.datetime.now(),
+            datetime.now(),
             user_id,
         ),
     )
@@ -229,7 +229,7 @@ def couple(current_user_id):
     # If another user in search is found, couple the users
     other_user_id = other_user_id[0]
     # Update both users' partner_id to reflect the coupling
-    start_chat_time = datetime.datetime.now()
+    start_chat_time = datetime.now()
     c.execute(
         "UPDATE users SET partner_id=?, start_chat_time=?, status=? WHERE user_id=?",
         (other_user_id, start_chat_time, UserStatus.COUPLED, current_user_id),
@@ -255,8 +255,8 @@ def check_user_duration(user_id, min_duration=86400.0):
         conn.close()
         return True
 
-    start_bot_time = datetime.datetime.fromisoformat(start_bot_time[0])
-    duration = datetime.datetime.now() - start_bot_time
+    start_bot_time = datetime.fromisoformat(start_bot_time[0])
+    duration = datetime.now() - start_bot_time
 
     return duration.total_seconds() >= min_duration
 
@@ -276,8 +276,8 @@ def check_chat_duration(user_id, min_duration=300.0):
         conn.close()
         return False
 
-    start_chat_time = datetime.datetime.fromisoformat(start_chat_time[0])
-    duration = datetime.datetime.now() - start_chat_time
+    start_chat_time = datetime.fromisoformat(start_chat_time[0])
+    duration = datetime.now() - start_chat_time
 
     return duration.total_seconds() >= min_duration
 

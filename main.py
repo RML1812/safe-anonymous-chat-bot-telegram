@@ -1,4 +1,7 @@
+import logging
+
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     ChatMemberHandler,
     CommandHandler,
@@ -9,21 +12,51 @@ from telegram.ext import (
 import db_connection
 from bot_handler import *
 from config import BOT_TOKEN
+from LogHandler import LogHandler
 
-"""
-List of commands
----> start - 🤖 memulai bot
----> chat - 💬 melakukan pencarian chat dengan orang lain
----> next - ⏭ melakukan skip terhadap chat yang berjalan dan mencari chat kembali dengan orang lain 
----> stop - 🔚 memberhentikan aktivitas /search ataupun chat yang sedang berjalan
----> credit - 🧪 melihat angka kesehatan perilaku pengguna berdasarkan hasil riwayat dari toxic detection
----> rules - 🚦 memperlihatkan peraturan yang ada saat menggunakan chat bot 
----> help - 🔍 menjelaskan cara penggunaan chat bot
-"""
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        LogHandler(),
+        logging.StreamHandler(),
+    ],
+)
+
+
+async def turn_online(application: Application):
+    user_ids = db_connection.get_all_user_ids()
+    for user_id in user_ids:
+        await application.bot.send_message(
+            reply_markup=ReplyKeyboardMarkup(
+                [["/start"]],
+                resize_keyboard=True,
+                one_time_keyboard=True,
+                is_persistent=True,
+            ),
+            chat_id=user_id,
+            text=responses.turn_online,
+        )
+
+
+async def turn_offline(application: Application):
+    user_ids = db_connection.get_all_user_ids()
+    for user_id in user_ids:
+        await application.bot.send_message(
+            reply_markup=ReplyKeyboardRemove(),
+            chat_id=user_id,
+            text=responses.turn_offline,
+        )
 
 
 if __name__ == "__main__":
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    application = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .post_init(turn_online)
+        .post_stop(turn_offline)
+        .build()
+    )
     # Create the database, if not already present
     db_connection.create_db()
 

@@ -37,6 +37,4 @@ rules = "🤖 Peraturan Bot\
 
 # Admin
 turn_offline = "🪫 Bot sedang offline sehingga tidak dapat digunakan terlebih dahulu, maaf atas ketidaknyamannya"
-turn_online = (
-    "🔋 Bot sudah kembali online, kirimkan /start untuk kembali menggunakan bot"
-)
+turn_online = "🔋 Bot sudah kembali online, kirimkan /start untuk kembali menggunakan bot"
