@@ -88,7 +88,9 @@ async def verify_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
         await context.bot.send_message(
-            chat_id=update.effective_chat.id, text=responses.start
+            reply_markup=update_keyboard(user_id),
+            chat_id=update.effective_chat.id,
+            text=responses.start,
         )
 
     else:

@@ -1,4 +1,6 @@
 import logging
+import os
+import signal
 
 from telegram.ext import (
     Application,
@@ -25,6 +27,7 @@ logging.basicConfig(
 
 
 async def turn_online(application: Application):
+    db_connection.set_bot_status(True, os.getpid())
     user_ids = db_connection.get_all_user_ids()
     for user_id in user_ids:
         await application.bot.send_message(
@@ -40,6 +43,7 @@ async def turn_online(application: Application):
 
 
 async def turn_offline(application: Application):
+    db_connection.set_bot_status(False, 0)
     user_ids = db_connection.get_all_user_ids()
     for user_id in user_ids:
         await application.bot.send_message(
@@ -90,4 +94,4 @@ if __name__ == "__main__":
         fallbacks=[MessageHandler(filters.TEXT, handle_not_in_chat)],
     )
     application.add_handler(conv_handler)
-    application.run_polling()
+    application.run_polling(stop_signals=signal.CTRL_C_EVENT)

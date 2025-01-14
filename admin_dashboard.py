@@ -3,24 +3,22 @@ import logging
 import os
 import subprocess
 import sys
-import time  # Added for delay
+import time
 from datetime import datetime
 
 import psutil
 import streamlit as st
+from telegram import Bot, ReplyKeyboardRemove
 
 import db_connection
-from config import ADMIN_NAME, ADMIN_PW
+import responses
+from config import ADMIN_NAME, ADMIN_PW, BOT_TOKEN
 from LogHandler import LogHandler
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
-if "is_online" not in st.session_state:
-    st.session_state["is_online"] = False
-if "pid" not in st.session_state:
-    st.session_state["pid"] = 0
 if "delay" not in st.session_state:
-    st.session_state["delay"] = 3
+    st.session_state["delay"] = 15
 
 
 logging.basicConfig(
@@ -38,38 +36,39 @@ def get_user_numbers():
     return total_users, coupled_users
 
 
-def kills(pid):
-    parent = psutil.Process(pid)
-    for child in parent.children(recursive=True):
-        child.kill()
-    parent.kill()
-
-
 async def set_online():
-    st.session_state["is_online"] = True
-
     with st.spinner("Setting bot online, please wait..."):
-        process = subprocess.Popen([sys.executable, "main.py"])
-        st.session_state["pid"] = process.pid
+        process = subprocess.Popen([sys.executable, "main.py"], shell=True)
+        db_connection.set_bot_status(True, process.pid)
         logging.info("Bot turned online.")
         time.sleep(st.session_state["delay"])
         st.rerun()
 
 
 async def set_offline():
-    st.session_state["is_online"] = False
-
     with st.spinner("Setting bot offline, please wait..."):
-        if st.session_state["pid"] is not None:
-            kills(st.session_state["pid"])
-            logging.info("Bot turned offline.")
-            time.sleep(st.session_state["delay"])
-            st.rerun()
+        pid = db_connection.get_bot_pid()
+        process = psutil.Process(pid)
+        process.terminate()
+        logging.info("Bot turned offline.")
+        time.sleep(st.session_state["delay"])
+
+        db_connection.set_bot_status(False, 0)
+        user_ids = db_connection.get_all_user_ids()
+        bot = Bot(token=BOT_TOKEN)
+        for user_id in user_ids:
+            await bot.send_message(
+                reply_markup=ReplyKeyboardRemove(),
+                chat_id=user_id,
+                text=responses.turn_offline,
+            )
+
+        st.rerun()
 
 
 def reset_database():
     with st.spinner("Resetting database, please wait..."):
-        if st.session_state["is_online"]:
+        if db_connection.is_online():
             asyncio.run(set_offline())
         else:
             if os.path.exists("users_database.db"):
@@ -108,8 +107,8 @@ def refresh():
 
 def sidebar_status():
     # Show Online/Offline state in the sidebar
-    is_online_status = "Online" if st.session_state["is_online"] else "Offline"
-    status_color = "green" if st.session_state["is_online"] else "red"
+    is_online_status = "Online" if db_connection.is_online() else "Offline"
+    status_color = "green" if db_connection.is_online() else "red"
     st.sidebar.markdown(
         f"### Current State: <span style='color:{status_color}'>{is_online_status}</span>",
         unsafe_allow_html=True,
@@ -128,21 +127,21 @@ def dashboard():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if not st.session_state["is_online"]:
+        if not db_connection.is_online():
             if st.button("Go Online"):
                 asyncio.run(set_online())
         else:
             st.button("Go Online", disabled=True)
 
     with col2:
-        if st.session_state["is_online"]:
+        if db_connection.is_online():
             if st.button("Go Offline"):
                 asyncio.run(set_offline())
         else:
             st.button("Go Offline", disabled=True)
 
     with col3:
-        if not st.session_state["is_online"]:
+        if db_connection.is_online():
             if st.button("Reset Database"):
                 reset_database()
         else:

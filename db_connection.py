@@ -15,20 +15,40 @@ def connect_to_db():
 def create_db():
     # Connect to the chatbot database
     conn, c = connect_to_db()
-    # Create the users table if it does not exist (user_id, start_bot_time, start_chat_time, credit, status, partner_id)
+
+    # Create the users table if it does not exist
     c.execute(
         """
-        CREATE TABLE IF NOT EXISTS
-            users (
-                user_id TEXT PRIMARY KEY,
-                start_bot_time TIMESTAMP,
-                start_chat_time TIMESTAMP,
-                credit INT CHECK(credit >= 0 AND credit <= 100),
-                status TEXT,
-                partner_id TEXT
-            )
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            start_bot_time TIMESTAMP,
+            start_chat_time TIMESTAMP,
+            credit INT CHECK(credit >= 0 AND credit <= 100),
+            status TEXT,
+            partner_id TEXT
+        )
         """
     )
+
+    # Create the bot_status table if it does not exist
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bot_status (
+            online BOOLEAN,
+            pid INTEGER
+        )
+        """
+    )
+
+    # Insert the default row into bot_status if the table is empty
+    c.execute(
+        """
+        INSERT INTO bot_status (online, pid)
+        SELECT 0, 0
+        WHERE NOT EXISTS (SELECT 1 FROM bot_status)
+        """
+    )
+
     conn.commit()
     conn.close()
 
@@ -64,6 +84,47 @@ def insert_user(user_id):
     )  # No partner_id initially
     conn.commit()
     conn.close()
+
+
+def set_bot_status(online, pid):
+    # Connect to the chatbot database
+    conn, c = connect_to_db()
+
+    # Ensure there's only one row in the table
+    c.execute("DELETE FROM bot_status")
+
+    # Insert the single row
+    c.execute("INSERT INTO bot_status (online, pid) VALUES (?, ?)", (online, pid))
+
+    conn.commit()
+    conn.close()
+
+
+def get_bot_pid():
+    # Connect to the chatbot database
+    conn, c = connect_to_db()
+
+    c.execute("SELECT pid FROM bot_status")
+    row = c.fetchone()  # Fetch the single row
+    pid: int = row[0]
+
+    conn.close()
+
+    return pid
+
+
+def is_online():
+    # Connect to the chatbot database
+    conn, c = connect_to_db()
+
+    c.execute("SELECT online FROM bot_status")
+    row = c.fetchone()  # Fetch the single row
+
+    is_online: bool = row[0]
+
+    conn.close()
+
+    return is_online
 
 
 def get_all_user_ids():
