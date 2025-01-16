@@ -1,7 +1,11 @@
 import io
+import os
+
+basepath = os.path.dirname(os.path.abspath(__file__))
+os.environ["PATH"] += os.path.join(basepath, "bin") + ";"
+import lottie
 
 import imageio.v3 as iio
-import lottie
 from PIL import Image
 from telegram import Message
 from telegram.ext import ContextTypes
