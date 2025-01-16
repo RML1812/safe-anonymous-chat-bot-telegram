@@ -15,7 +15,7 @@ class LogHandler(logging.FileHandler):
         super().__init__(log_filename, mode="a", encoding="utf-8")
 
     def emit(self, record):
-        """Override emit to write newest logs at the top."""
+        # Override emit to write newest logs at the top
         try:
             # Format the log entry
             log_entry = self.format(record) + "\n"
@@ -26,9 +26,11 @@ class LogHandler(logging.FileHandler):
                     content = file.read()
                     file.seek(0, 0)
                     file.write(log_entry.rstrip("\r\n") + "\n" + content)
+
             else:
                 # If the file doesn't exist, create it and write the log entry
                 with open(self.baseFilename, "w", encoding="utf-8") as file:
                     file.write(log_entry)
+                    
         except Exception:
             self.handleError(record)

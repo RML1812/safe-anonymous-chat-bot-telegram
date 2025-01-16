@@ -12,7 +12,7 @@ bert_model.eval()  # Set model to evaluation mode
 nsfw_model = pipeline("image-classification", model="Falconsai/nsfw_image_detection")
 
 
-def predict_toxic_text(text, threshold=0.65):
+def predict_toxic_text(text: str, threshold=0.7) -> bool:
     """
     Predict whether the text is toxic.
     :param text: input text to analyze
@@ -31,9 +31,9 @@ def predict_toxic_text(text, threshold=0.65):
     )  # Returns True if any category is above threshold
 
 
-def predict_toxic_image(image):
+def predict_toxic_image(image: any) -> bool:
     try:
-        # Ensure the image is compatible and saved in JPEG format
+        # Check if parameter is already an instance of Image.Image
         if not isinstance(image, Image.Image):
             image = Image.open(image)
 
@@ -46,7 +46,7 @@ def predict_toxic_image(image):
                 nsfw_score = prediction["score"]
 
                 # If the 'nsfw' score exceeds the threshold, consider it NSFW
-                if nsfw_score > 0.65:
+                if nsfw_score > 0.7:
                     return True
 
     except Exception as e:

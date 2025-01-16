@@ -3,7 +3,7 @@ import string
 from io import BytesIO
 
 from captcha.image import ImageCaptcha
-from telegram import ChatMember, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram import ChatMember, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, Message
 from telegram.ext import ContextTypes, ConversationHandler
 
 import db_connection
@@ -16,44 +16,44 @@ CAPTCHA = 0
 USER_ACTION = 1
 
 
-def update_keyboard(user_id):
-    user_status = db_connection.get_user_status(user_id=user_id)
+def update_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+    user_status = db_connection.get_user_status(user_id=user_id)  # Get user's status
 
+    # Return ReplyKeyboardMarkup based on user's status
     if user_status == UserStatus.IDLE or user_status == UserStatus.PARTNER_LEFT:
         return ReplyKeyboardMarkup(
             [["/chat"]], resize_keyboard=True, is_persistent=True
         )
+    
     elif user_status == UserStatus.IN_SEARCH:
         return ReplyKeyboardMarkup(
             [["/stop"]], resize_keyboard=True, is_persistent=True
         )
+    
     elif user_status == UserStatus.COUPLED:
         return ReplyKeyboardRemove()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """
-    Welcomes the user and sets their status to idle if not already in the database.
-    Prompts for captcha verification for new users.
-    """
     user_id = update.effective_user.id
 
-    # Check if the user exists in the database
+    # Check if the user exists in the database, returns to captcha state if not
     if db_connection.check_user(user_id):
+        # Check if user's duration on bot is within min_duration (24h), returns to captcha state if not
         if db_connection.check_user_duration(user_id):
-            await send_captcha(update, context)
-            return CAPTCHA
+            return USER_ACTION
 
         else:
-            return USER_ACTION
+            await send_captcha(update, context)
+            return CAPTCHA
 
     else:
         await send_captcha(update, context)
         return CAPTCHA
 
 
-async def send_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Generate and send the captcha for new users
+async def send_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Generate and send the captcha user
     captcha = ImageCaptcha()
     random_string = "".join(
         random.choices(string.ascii_letters.lower() + string.digits, k=5)
@@ -69,19 +69,18 @@ async def send_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def verify_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """
-    Verifies the user's input against the captcha.
-    """
-    user_input = update.message.text
+async def verify_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_input = update.message.text  # Retrieve message (user's captcha input)
     correct_captcha = context.user_data.get("captcha")  # Retrieve stored captcha
 
+    # Check if user's captcha input is correct, notify user that captcha is incorrect if not
     if user_input == correct_captcha:
-        user_id = update.effective_user.id
+        user_id = update.effective_user.id  # Retrieve user id
+        # Check if user is already exist in database, insert user to database if not
         if not db_connection.check_user(user_id):
             db_connection.insert_user(user_id)
 
-        db_connection.set_user_start_bot_time(user_id)
+        db_connection.set_user_start_bot_time(user_id)  # Set user start bot timestamp
 
         await context.bot.send_message(
             chat_id=update.effective_chat.id, text=responses.captcha_true
@@ -94,41 +93,34 @@ async def verify_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
     else:
+        # Send message to notify that captha is incorrect to user
         await context.bot.send_message(
             chat_id=update.effective_chat.id, text=responses.captcha_false
         )
 
+    # Returns to start function for rechecking
     return await start(update, context)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Define the action to do based on the message received and the actual status of the user
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: None
-    """
     user_id = update.effective_user.id
 
     # Check if the user is in chat
     if db_connection.get_user_status(user_id=user_id) == UserStatus.COUPLED:
         # User is in chat, retrieve the other user
         other_user_id = db_connection.get_partner_id(user_id)
+
         if other_user_id is None:
             return await handle_not_in_chat(update, context)
+        
         else:
             return await in_chat(update, context, other_user_id)
+        
     else:
         return await handle_not_in_chat(update, context)
 
 
 async def handle_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Handles the /chat command, starting the search for a partner if the user is not already in search
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: None
-    """
     # Handle the command /chat in different cases, based on the status of the user
     current_user_id = update.effective_user.id
     current_user_status = db_connection.get_user_status(user_id=current_user_id)
@@ -140,22 +132,25 @@ async def handle_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             chat_id=current_user_id,
             text=responses.not_eligible,
         )
+
         return
 
     if current_user_status == UserStatus.PARTNER_LEFT:
-        # First, check if the user has been left by his/her partner (he/she would have updated this user's status to
-        # PARTNER_LEFT)
+        # First, check if the user has been left by partner
         db_connection.set_user_status(
             user_id=current_user_id, new_status=UserStatus.IDLE
         )
 
         return await start_search(update, context)
+    
     elif current_user_status == UserStatus.IN_SEARCH:
-        # Warn him/her that he/she is already in search
+        # Warn user is already in search
         return await handle_already_in_search(update, context)
+    
     elif current_user_status == UserStatus.COUPLED:
         # Double check if the user is in chat
         other_user = db_connection.get_partner_id(current_user_id)
+
         if other_user is not None:
             # If the user has been paired, then he/she is already in a chat, so warn him/her
             await context.bot.send_message(
@@ -163,23 +158,19 @@ async def handle_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 chat_id=current_user_id,
                 text=responses.in_chat,
             )
+
             return None
+        
         else:
             return await start_search(update, context)
+        
     elif current_user_status == UserStatus.IDLE:
         # The user is in IDLE status, so simply start the search
         return await start_search(update, context)
 
 
-async def handle_not_in_chat(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
-    """
-    Handles the case when the user is not in chat
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: None
-    """
+async def handle_not_in_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Handle user that is not in chat but sent non-command message regardless
     current_user_id = update.effective_user.id
     current_user_status = db_connection.get_user_status(user_id=current_user_id)
 
@@ -189,40 +180,26 @@ async def handle_not_in_chat(
             chat_id=current_user_id,
             text=responses.not_in_chat,
         )
+
         return
+    
     elif current_user_status == UserStatus.IN_SEARCH:
-        await context.bot.send_message(
-            reply_markup=update_keyboard(current_user_id),
-            chat_id=current_user_id,
-            text=responses.in_searching,
-        )
+        handle_already_in_search(update, context)
+
         return
 
 
-async def handle_already_in_search(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
-    """
-    Handles the case when the user is already in search
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: None
-    """
+async def handle_already_in_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Handle user that is searching but sent message regardless
     await context.bot.send_message(
         reply_markup=update_keyboard(update.effective_user.id),
         chat_id=update.effective_chat.id,
         text=responses.in_searching,
     )
-    return
 
 
 async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Starts the search for a partner, setting the user status to in_search and adding him/her to the list of users
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: None
-    """
+    # Recheck session with start function, returns to captcha state if true
     if await start(update, context) is CAPTCHA:
         return CAPTCHA
 
@@ -253,27 +230,9 @@ async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             text=responses.searching_found,
         )
 
-    return
-
-
-async def handle_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Handles the /exit command, exiting from the chat if the user is in chat
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: None
-    """
-    await stop_chat(update, context)
-    return
-
 
 async def handle_credit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Handles the /stats command, showing the bot statistics if the user is the admin
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: None
-    """
+    # Handle the /credit command, send message of user's credit value
     user_id = update.effective_user.id
     await context.bot.send_message(
         reply_markup=update_keyboard(user_id),
@@ -281,16 +240,9 @@ async def handle_credit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         text=f"{responses.credit_score}{db_connection.get_user_credit(user_id)}",
     )
 
-    return
-
 
 async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Handles the /stats command, showing the bot statistics if the user is the admin
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: None
-    """
+    # Handles the /help command, send message of bot command's list
     user_id = update.effective_user.id
     await context.bot.send_message(
         reply_markup=update_keyboard(user_id), chat_id=user_id, text=responses.help
@@ -300,29 +252,15 @@ async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def handle_rules(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Handles the /stats command, showing the bot statistics if the user is the admin
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: None
-    """
+    # Handles the /rules command, send message of bot's rules
     user_id = update.effective_user.id
     await context.bot.send_message(
         reply_markup=update_keyboard(user_id), chat_id=user_id, text=responses.rules
     )
 
-    return
 
-
-async def stop_chat(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, toxic=False
-) -> None:
-    """
-    Exits from the chat, sending a message to the other user and updating the status of both the users
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: a boolean value, True if the user was in chat (and so exited), False otherwise
-    """
+async def handle_stop(update: Update, context: ContextTypes.DEFAULT_TYPE, toxic=False) -> None:
+    # Handles the /stop command, able to stop ongoing search or chat
     current_user = update.effective_user.id
 
     if db_connection.get_user_status(user_id=current_user) == UserStatus.IN_SEARCH:
@@ -332,6 +270,7 @@ async def stop_chat(
             chat_id=current_user,
             text=responses.searching_stopped,
         )
+
         return
 
     if db_connection.get_user_status(user_id=current_user) != UserStatus.COUPLED:
@@ -340,20 +279,25 @@ async def stop_chat(
             chat_id=current_user,
             text=responses.not_in_chat,
         )
+
         return
 
     other_user = db_connection.get_partner_id(current_user)
     if other_user is None:
         return
 
+    # If parameters toxic is True, reduce user credit by 25
+    # User's credit increase by 5 if toxic is false and chat duration is over 5min
     if toxic is True:
-        db_connection.update_credit(current_user, -25)
+        db_connection.set_credit(current_user, -25)
+
         if db_connection.check_chat_duration(other_user):
-            db_connection.update_credit(other_user, 5)
+            db_connection.set_credit(other_user, 5)
+
     else:
         if db_connection.check_chat_duration(current_user):
-            db_connection.update_credit(current_user, 5)
-            db_connection.update_credit(other_user, 5)
+            db_connection.set_credit(current_user, 5)
+            db_connection.set_credit(other_user, 5)
 
     # Perform the uncoupling
     db_connection.uncouple(user_id=current_user)
@@ -380,37 +324,41 @@ async def stop_chat(
         text=f"{responses.credit_score}{db_connection.get_user_credit(current_user)}",
     )
 
-    return
 
-
-async def exit_then_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Handles the /newchat command, exiting from the chat and starting a new search if the user is in chat
-    :param update: update received from the user
-    :param context: context of the bot
-    :return: None
-    """
+async def handle_next(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Handles the /next command, exiting from the chat and starting a new search if the user is in chat
     current_user = update.effective_user.id
+
     if db_connection.get_user_status(user_id=current_user) == UserStatus.IN_SEARCH:
         return await handle_already_in_search(update, context)
+    
     # If exit_chat returns True, then the user was in chat and successfully exited
-    await stop_chat(update, context)
+    await handle_stop(update, context)
+
     # Either the user was in chat or not, start the search
     return await start_search(update, context)
 
 
-async def in_chat(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, other_user_id
-) -> None:
-    """
-    Handles the case when the user is in chat, processes and checks for toxicity in the message.
-    If the message is toxic, the bot ends the chat for both users.
-    :param update: update received from the user
-    :param other_user_id: id of the other user in chat
-    :return: None
-    """
-    # Retrieve the message
+async def is_message_incompatible(update: Update, context: ContextTypes.DEFAULT_TYPE, message: Message) -> bool:
+    # Check if message is incompatible in this bot specs (inc. document, audio, video)
+    if message.audio or message.video or message.video_note or message.voice or (message.document and not message.animation):
+        await context.bot.send_message(
+            reply_markup=update_keyboard(update.effective_user.id),
+            chat_id=update.effective_user.id,
+            text=responses.incompatible_message,
+        )
+        return True
+    
+    return False
+
+
+async def in_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, other_user_id) -> None:
+    # Handles the case when the user is in chat, processes and checks for toxicity in the message.
     message = update.message
+
+    # Check for message compatibility
+    if await is_message_incompatible(update, context, message):
+        return
 
     # Check for toxicity
     if await predict_toxicity(context, message):
@@ -429,7 +377,7 @@ async def in_chat(
         )
 
         # Exit chat
-        await stop_chat(update, context, True)
+        await handle_stop(update, context, True)
 
         return
 
@@ -475,10 +423,9 @@ async def in_chat(
             protect_content=True,
         )
 
-    return
-
 
 def is_bot_blocked_by_user(update: Update) -> bool:
+    # Check if bot is blocked by user
     new_member_status = update.my_chat_member.new_chat_member.status
     old_member_status = update.my_chat_member.old_chat_member.status
     if (
@@ -486,15 +433,18 @@ def is_bot_blocked_by_user(update: Update) -> bool:
         and old_member_status == ChatMember.MEMBER
     ):
         return True
+    
     else:
         return False
 
 
 async def blocked_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Handle if bot is blocked by user
     if is_bot_blocked_by_user(update):
         # Check if user was in chat
         user_id = update.effective_user.id
         user_status = db_connection.get_user_status(user_id=user_id)
+
         if user_status == UserStatus.COUPLED:
             other_user = db_connection.get_partner_id(user_id)
             db_connection.uncouple(user_id=user_id)
@@ -503,7 +453,9 @@ async def blocked_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
                 chat_id=other_user,
                 text=responses.stopped_chat,
             )
+
         return ConversationHandler.END
+    
     else:
         # Telegram API does not provide a way to check if the bot was unblocked by the user
         return USER_ACTION

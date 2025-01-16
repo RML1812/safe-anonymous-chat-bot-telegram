@@ -1,6 +1,5 @@
 import logging
 import os
-import signal
 
 from telegram.ext import (
     Application,
@@ -26,7 +25,8 @@ logging.basicConfig(
 )
 
 
-async def turn_online(application: Application):
+async def turn_online(application: Application) -> None:
+    # Process for post_init
     db_connection.set_bot_status(True, os.getpid())
     user_ids = db_connection.get_all_user_ids()
     for user_id in user_ids:
@@ -42,7 +42,8 @@ async def turn_online(application: Application):
         )
 
 
-async def turn_offline(application: Application):
+async def turn_offline(application: Application) -> None:
+    # Process for post_stop
     db_connection.set_bot_status(False, 0)
     user_ids = db_connection.get_all_user_ids()
     for user_id in user_ids:
@@ -61,6 +62,7 @@ if __name__ == "__main__":
         .post_stop(turn_offline)
         .build()
     )
+
     # Create the database, if not already present
     db_connection.create_db()
 
@@ -85,7 +87,7 @@ if __name__ == "__main__":
                 ),
                 CommandHandler("stop", handle_stop),
                 CommandHandler("chat", handle_chat),
-                CommandHandler("next", exit_then_chat),
+                CommandHandler("next", handle_next),
                 CommandHandler("help", handle_help),
                 CommandHandler("rules", handle_rules),
                 CommandHandler("credit", handle_credit),
@@ -94,4 +96,4 @@ if __name__ == "__main__":
         fallbacks=[MessageHandler(filters.TEXT, handle_not_in_chat)],
     )
     application.add_handler(conv_handler)
-    application.run_polling(stop_signals=signal.CTRL_C_EVENT)
+    application.run_polling()

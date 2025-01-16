@@ -17,6 +17,7 @@ stopped_chat = "🤖 Chat diakhiri oleh lawan bicara, mulai pencarian chat lagi 
 toxic_stop_chat = "🤖 Kamu mengirimkan pesan toxic, chat akan diakhiri dan credit score mu akan dikurangi sebanyak 25"
 toxic_stopped_chat = "🤖 Chat diakhiri karena lawan bicara mengirimkan pesan toxic"
 credit_score = "🤖 Skor kredit kamu sekarang adalah : "
+incompatible_message = "🤖 Tipe pesan tidak disupport pada bot ini, pesan tidak terkirimkan"
 not_eligible = "🤖 Skor kreditmu adalah 0, kamu tidak dapat menggunakan fitur chat lagi"
 help = "🤖 Daftar Perintah\
         \n/start - 🤖 memulai bot\

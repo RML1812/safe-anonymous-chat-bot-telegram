@@ -4,7 +4,7 @@ from datetime import datetime
 from UserStatus import UserStatus
 
 
-def connect_to_db():
+def connect_to_db() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
     # Connect to the chatbot database
     conn = sqlite3.connect("users_database.db")
     c = conn.cursor()
@@ -12,9 +12,8 @@ def connect_to_db():
     return conn, c
 
 
-def create_db():
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def create_db() -> None:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
     # Create the users table if it does not exist
     c.execute(
@@ -49,26 +48,28 @@ def create_db():
         """
     )
 
+    # Commit and close connection
     conn.commit()
     conn.close()
 
 
-def check_user(user_id):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def check_user(user_id: int) -> bool:
+    conn, c = connect_to_db()  # Connect to the chatbot database
+
     # Check if the user is already in the users table
     c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
+
     if c.fetchone():
         # If the user is already in the users table, returns True
         conn.close()
         return True
+    
     else:
         return False
 
 
-def insert_user(user_id):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def insert_user(user_id: int) -> None:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
     # Insert the user into the users table
     c.execute(
@@ -81,14 +82,15 @@ def insert_user(user_id):
             UserStatus.IDLE,
             None,
         ),
-    )  # No partner_id initially
+    )
+
+    # Commit and close connection
     conn.commit()
     conn.close()
 
 
-def set_bot_status(online, pid):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def set_bot_status(online: bool, pid: int) -> None:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
     # Ensure there's only one row in the table
     c.execute("DELETE FROM bot_status")
@@ -96,67 +98,67 @@ def set_bot_status(online, pid):
     # Insert the single row
     c.execute("INSERT INTO bot_status (online, pid) VALUES (?, ?)", (online, pid))
 
+    # Commit and close connection
     conn.commit()
     conn.close()
 
 
-def get_bot_pid():
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def get_bot_pid() -> int:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
+    # Get pid
     c.execute("SELECT pid FROM bot_status")
-    row = c.fetchone()  # Fetch the single row
-    pid: int = row[0]
+    pid = c.fetchone()[0]
 
+    # Close connection
     conn.close()
 
     return pid
 
 
-def is_online():
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def is_online() -> bool:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
+    # Get online status
     c.execute("SELECT online FROM bot_status")
-    row = c.fetchone()  # Fetch the single row
+    is_online = c.fetchone()[0] 
 
-    is_online: bool = row[0]
-
+    # Close connection
     conn.close()
 
     return is_online
 
 
-def get_all_user_ids():
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def get_all_user_ids() -> list:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
-    # Execute the query to fetch all user_ids
+    # Get all user_ids
     c.execute("SELECT user_id FROM users")
     user_ids = [row[0] for row in c.fetchall()]
 
-    # Close the connection
-    c.close()
+    # Close connection
     conn.close()
 
     return user_ids
 
 
-def get_user_status(user_id):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def get_user_status(user_id: int) -> str:
+    conn, c = connect_to_db()  # Connect to the chatbot database
+
     # Get the status of the user
     c.execute("SELECT status FROM users WHERE user_id=?", (user_id,))
     status = c.fetchone()[0]
+
+    # Close connection
     conn.close()
 
     return status
 
 
-def set_user_status(user_id, new_status):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
-    # Set the status of the user
+def set_user_status(user_id: int, new_status: str) -> None:
+    conn, c = connect_to_db()  # Connect to the chatbot database
+
+    # Update the status of the user
     c.execute(
         "UPDATE users SET status=? WHERE user_id=?",
         (
@@ -164,14 +166,16 @@ def set_user_status(user_id, new_status):
             user_id,
         ),
     )
+
+    # Commit and close connection
     conn.commit()
     conn.close()
 
 
-def set_user_start_bot_time(user_id):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
-    # Set the status of the user
+def set_user_start_bot_time(user_id) -> None:
+    conn, c = connect_to_db()  # Connect to the chatbot database
+
+    # Update the user's start bot time
     c.execute(
         "UPDATE users SET start_bot_time=? WHERE user_id=?",
         (
@@ -179,27 +183,20 @@ def set_user_start_bot_time(user_id):
             user_id,
         ),
     )
+
+    # Commit and close connection
     conn.commit()
     conn.close()
 
 
-def update_credit(user_id, delta, conn=any, c=any):
-    """
-    Updates the credit of the user by delta.
-    If delta is positive, adds credit up to a max of 100.
-    If delta is negative, subtracts credit down to a minimum of 0.
-    """
-    conn, c = connect_to_db()
+def set_credit(user_id: int, delta: int) -> None:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
-    # Fetch the current credit
+    # Get the current credit
     c.execute("SELECT credit FROM users WHERE user_id=?", (user_id,))
-    current_credit = c.fetchone()
-    if not current_credit:
-        conn.close()
-        return
+    current_credit = c.fetchone()[0]
 
-    current_credit = current_credit[0]
-    # Update credit value within bounds
+    # Set credit value within bounds
     new_credit = max(0, min(100, current_credit + delta))
 
     # Update the credit in the database
@@ -211,69 +208,58 @@ def update_credit(user_id, delta, conn=any, c=any):
         ),
     )
 
+    # Commit and close connection
     conn.commit()
     conn.close()
 
-    # Return the updated credit for logging or further use
-    return new_credit
 
+def get_user_credit(user_id: int) -> int:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
-def get_user_credit(user_id):
-    """
-    Retrieves the current credit value of a user by user_id.
-    :param user_id: The ID of the user whose credit is being retrieved.
-    :return: The user's credit as an integer, or None if the user does not exist.
-    """
-    conn, c = connect_to_db()
-
-    # Fetch the user's credit
+    # Get the user's credit
     c.execute("SELECT credit FROM users WHERE user_id=?", (user_id,))
-    credit = c.fetchone()
+    credit = c.fetchone()[0]
+
+    # Close connection
     conn.close()
 
-    # Check if the user exists
-    if credit is not None:
-        return credit[0]  # Return the credit value
-    return None  # Return None if the user is not found
+    return credit
 
 
-def is_eligible_to_chat(user_id):
-    """
-    Checks if the user is eligible to chat based on their credit.
-    Returns True if credit > 0, otherwise False.
-    """
-    conn, c = connect_to_db()
-    c.execute("SELECT credit FROM users WHERE user_id=?", (user_id,))
-    credit = c.fetchone()
-    conn.close()
+def is_eligible_to_chat(user_id: int) -> bool:
+    credit = get_user_credit(user_id)  # Get the user's credit
 
-    if credit and credit[0] > 0:
+    # Returns True if credit is > 0 (eligible)
+    if credit > 0:
         return True
 
     return False
 
 
-def get_partner_id(user_id):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def get_partner_id(user_id: int) -> int:
+    conn, c = connect_to_db()  # Connect to the chatbot database
+
     # If the user is a guest, then search for the host
     c.execute("SELECT user_id FROM users WHERE partner_id=?", (user_id,))
     other_user_id = c.fetchone()
+
     if not other_user_id:
         # If no user is found, return None
         conn.close()
         return None
 
-    # otherwise, return the other user's id
+    # Otherwise, returns the other user's id
     other_user_id = other_user_id[0]
+
+    # Close connection
     conn.close()
 
     return other_user_id
 
 
-def couple(current_user_id):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def couple(current_user_id: int) -> int:
+    conn, c = connect_to_db() # Connect to the chatbot database
+
     # If the user is not the current one and is in search, then couple them
     c.execute(
         "SELECT user_id FROM users WHERE status=? AND user_id!=?",
@@ -282,14 +268,17 @@ def couple(current_user_id):
             current_user_id,
         ),
     )
+
     # Verify if another user in search is found
     other_user_id = c.fetchone()
     if not other_user_id:
         # If no user is found, return None
         return None
+    
     # If another user in search is found, couple the users
     other_user_id = other_user_id[0]
-    # Update both users' partner_id to reflect the coupling
+
+    # Update both users' partner_id and start chat time to reflect the coupling
     start_chat_time = datetime.now()
     c.execute(
         "UPDATE users SET partner_id=?, start_chat_time=?, status=? WHERE user_id=?",
@@ -300,53 +289,54 @@ def couple(current_user_id):
         (current_user_id, start_chat_time, UserStatus.COUPLED, other_user_id),
     )
 
+    # Commit and close connection
     conn.commit()
     conn.close()
 
     return other_user_id
 
 
-def check_user_duration(user_id, min_duration=86400.0):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def check_user_duration(user_id: int, max_duration: float=86400.0) -> bool:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
+    # Get user's start bot time and check if its exist, if not returns false
     c.execute("SELECT start_bot_time FROM users WHERE user_id=?", (user_id,))
     start_bot_time = c.fetchone()
     if not start_bot_time[0]:
         conn.close()
-        return True
+        return False
 
+    # Calculate duration in seconds
     start_bot_time = datetime.fromisoformat(start_bot_time[0])
     duration = datetime.now() - start_bot_time
 
-    return duration.total_seconds() >= min_duration
+    # Close connection
+    conn.close()
+
+    return duration.total_seconds() < max_duration
 
 
-def check_chat_duration(user_id, min_duration=300.0):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
-    # Retrieve the partner_id of the user
-    partner_id = get_partner_id(user_id)
-    if not partner_id:
-        # If the user is not coupled, return None
-        return False
+def check_chat_duration(user_id: int, min_duration: float=300.0) -> bool:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
+    # Get user's start chat time
     c.execute("SELECT start_chat_time FROM users WHERE user_id=?", (user_id,))
-    start_chat_time = c.fetchone()
-    if not start_chat_time:
-        conn.close()
-        return False
+    start_chat_time = c.fetchone()[0]
 
-    start_chat_time = datetime.fromisoformat(start_chat_time[0])
+    # Calculate duration in seconds
+    start_chat_time = datetime.fromisoformat(start_chat_time)
     duration = datetime.now() - start_chat_time
 
+    # Close connection
+    conn.close()
+
     return duration.total_seconds() >= min_duration
 
 
-def uncouple(user_id):
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
-    # Retrieve the partner_id of the user
+def uncouple(user_id: int) -> None:
+    conn, c = connect_to_db()  # Connect to the chatbot database
+
+    # Get partner_id of the user
     partner_id = get_partner_id(user_id)
     if not partner_id:
         # If the user is not coupled, return None
@@ -372,29 +362,31 @@ def uncouple(user_id):
         ),
     )
 
+    # Commit and close connection
     conn.commit()
     conn.close()
 
-    return
 
+def retrieve_users_number() -> tuple[int, int]:
+    conn, c = connect_to_db()  # Connect to the chatbot database
 
-def retrieve_users_number():
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
     # Retrieve the number of users in the users table
     c.execute("SELECT COUNT(*) FROM users")
     total_users_number = c.fetchone()[0]
+
     # Retrieve the number of users who are currently coupled
     c.execute("SELECT COUNT(*) FROM users WHERE status='coupled'")
     paired_users_number = c.fetchone()[0]
+
+    # Close connection
     conn.close()
 
     return total_users_number, paired_users_number
 
 
-def reset_users_status():
-    # Connect to the chatbot database
-    conn, c = connect_to_db()
+def reset_users_status() -> None:
+    conn, c = connect_to_db()  # Connect to the chatbot database
+
     # Reset the status of all users to UserStatus.IDLE
     c.execute(
         "UPDATE users SET start_bot_time=?, start_chat_time=?, status=?",
@@ -404,5 +396,7 @@ def reset_users_status():
             UserStatus.IDLE,
         ),
     )
+
+    # Commit and close connection
     conn.commit()
     conn.close()
