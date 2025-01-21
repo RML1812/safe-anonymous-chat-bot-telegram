@@ -31,14 +31,9 @@ logging.basicConfig(
 )
 
 
-def get_user_numbers():
-    total_users, coupled_users = db_connection.retrieve_users_number()
-    return total_users, coupled_users
-
-
 async def set_online():
     with st.spinner("Setting bot online, please wait..."):
-        process = subprocess.Popen([sys.executable, "main.py"], shell=True)
+        process = subprocess.Popen([sys.executable, "main.py"])
         db_connection.set_bot_status(True, process.pid)
         logging.info("Bot turned online.")
         time.sleep(st.session_state["delay"])
@@ -119,7 +114,7 @@ def dashboard():
     st.header("Dashboard")
 
     # Display user statistics
-    total_users, coupled_users = get_user_numbers()
+    total_users, coupled_users = db_connection.retrieve_users_number()
     st.metric("Total Users", total_users)
     st.metric("Coupled Users", coupled_users)
 
@@ -141,7 +136,7 @@ def dashboard():
             st.button("Go Offline", disabled=True)
 
     with col3:
-        if db_connection.is_online():
+        if not db_connection.is_online():
             if st.button("Reset Database"):
                 reset_database()
         else:
