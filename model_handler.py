@@ -8,16 +8,25 @@ bert_model = torch.load(f"{model_path}/model.pth")
 tokenizer = BertTokenizer.from_pretrained(model_path)
 bert_model.eval()  # Set model to evaluation mode
 
+# Define category labels and their respective thresholds
+category_columns = ['Hate Speech', 'Abusive Speech', 'SARA', 'Radicalism', 'Defamation']
+thresholds = {
+    'Hate Speech': 0.25,
+    'Abusive Speech': 0.30,
+    'SARA': 0.60,
+    'Radicalism': 0.50,
+    'Defamation': 0.20
+}
+
 # Initialize the NSFW detector model
 nsfw_model = pipeline("image-classification", model="Falconsai/nsfw_image_detection")
 
 
-def predict_toxic_text(text: str, threshold=0.7) -> bool:
+def predict_toxic_text(text: str) -> bool:
     """
-    Predict whether the text is toxic.
+    Predict whether the text is toxic using category-specific thresholds.
     :param text: input text to analyze
-    :param threshold: threshold for toxicity classification
-    :return: True if toxic, False otherwise
+    :return: True if toxic in any category, False otherwise
     """
     inputs = tokenizer(
         text, padding=True, truncation=True, max_length=128, return_tensors="pt"
@@ -26,9 +35,12 @@ def predict_toxic_text(text: str, threshold=0.7) -> bool:
         outputs = bert_model(**inputs)
         probabilities = torch.sigmoid(outputs.logits).squeeze().numpy()
 
-    return any(
-        prob >= threshold for prob in probabilities
-    )  # Returns True if any category is above threshold
+    # Apply category-specific thresholds
+    for i, prob in enumerate(probabilities):
+        category = category_columns[i]
+        if prob >= thresholds[category]:
+            return True
+    return False
 
 
 def predict_toxic_image(image: any) -> bool:
