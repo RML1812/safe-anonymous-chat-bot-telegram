@@ -3,7 +3,6 @@ python-telegram-bot
 captcha
 pysastrawi
 emoji
-sqlite3
 scikit-multilearn
 transformers
 tf-keras
